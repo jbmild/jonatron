@@ -8,6 +8,7 @@ import logging
 import os
 import re
 import sys
+import time
 from enum import Enum
 from pathlib import Path
 
@@ -49,17 +50,50 @@ class FileType(str, Enum):
 
 
 def get_deluge_client() -> DelugeRPCClient:
-    host = os.environ.get("DELUGE_HOST", "127.0.0.1")
+    host = os.environ.get("DELUGE_HOST", "127.0.0.1").strip()
+    if host in {"localhost", "::1"}:
+        host = "127.0.0.1"
     port = int(os.environ.get("DELUGE_PORT", "58846"))
     username = os.environ.get("DELUGE_USERNAME", "localclient")
     password = os.environ.get("DELUGE_PASSWORD")
+    timeout = int(os.environ.get("DELUGE_TIMEOUT", "60"))
     if not password:
         raise RuntimeError("DELUGE_PASSWORD is not set in the environment.")
 
     init_params = inspect.signature(DelugeRPCClient.__init__).parameters
+    client_kwargs = {"timeout": timeout} if "timeout" in init_params else {}
     if "username" in init_params:
-        return DelugeRPCClient(host, port, username, password)
-    return DelugeRPCClient(host, port, password)
+        return DelugeRPCClient(host, port, username, password, **client_kwargs)
+    return DelugeRPCClient(host, port, password, **client_kwargs)
+
+
+def connect_deluge(client: DelugeRPCClient) -> None:
+    last_error: Exception | None = None
+    for attempt in range(1, 4):
+        try:
+            logger.info(
+                "Connecting to Deluge at %s:%s (attempt %s)",
+                client.host,
+                client.port,
+                attempt,
+            )
+            client.connect()
+            return
+        except Exception as exc:
+            last_error = exc
+            logger.warning("Deluge connection attempt %s failed: %s", attempt, exc)
+            try:
+                client.disconnect()
+            except Exception:
+                pass
+            if attempt < 3:
+                time.sleep(2)
+
+    raise RuntimeError(
+        f"Could not connect to Deluge at {client.host}:{client.port}. "
+        "If Deluge listens on 127.0.0.1 only, set DELUGE_HOST=127.0.0.1 in your env file. "
+        f"Last error: {last_error}"
+    ) from last_error
 
 
 def sanitize_name(name: str) -> str:
@@ -82,7 +116,7 @@ def download_path_for(file_type: FileType, name: str) -> Path:
 def add_magnet_to_deluge(magnet: str, download_path: Path) -> str:
     download_path.mkdir(parents=True, exist_ok=True)
     client = get_deluge_client()
-    client.connect()
+    connect_deluge(client)
     try:
         torrent_id = client.call(
             "core.add_torrent_magnet",

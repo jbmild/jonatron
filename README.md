@@ -60,6 +60,7 @@ Set these variables:
 | `DELUGE_PORT` | Deluge RPC port (default: `58846`) |
 | `DELUGE_USERNAME` | Deluge RPC username (default: `localclient`) |
 | `DELUGE_PASSWORD` | Deluge RPC password from the auth file |
+| `DELUGE_TIMEOUT` | RPC connect timeout in seconds (default: `60`) |
 
 ### 3. Install and configure Deluge
 
@@ -320,6 +321,55 @@ Ensure `/etc/torrento-bot.env` exists and is readable by the service user:
 ```bash
 sudo chown jonatan:jonatan /etc/torrento-bot.env
 sudo chmod 600 /etc/torrento-bot.env
+```
+
+#### SSL handshake timeout
+
+If you see `The handshake operation timed out`, the bot usually cannot reach `deluged` RPC.
+
+Your earlier check showed Deluge RPC only on localhost:
+
+```
+127.0.0.1:58846
+```
+
+So `/etc/torrento-bot.env` **must** use:
+
+```
+DELUGE_HOST=127.0.0.1
+DELUGE_PORT=58846
+```
+
+Not your server's public IP and not port `8112` (web UI).
+
+Verify as the same user systemd uses:
+
+```bash
+sudo -u jonatan bash -lc '
+  set -a && source /etc/torrento-bot.env && set +a
+  echo "DELUGE_HOST=$DELUGE_HOST DELUGE_PORT=$DELUGE_PORT"
+  /home/jonatan/projects/jonatron/.venv/bin/python - <<'"'"'EOF'"'"'
+import os
+from deluge_client import DelugeRPCClient
+client = DelugeRPCClient(
+    os.environ.get("DELUGE_HOST", "127.0.0.1"),
+    int(os.environ.get("DELUGE_PORT", "58846")),
+    os.environ.get("DELUGE_USERNAME", "localclient"),
+    os.environ["DELUGE_PASSWORD"],
+    timeout=60,
+)
+client.connect()
+print("Connected to Deluge OK")
+client.disconnect()
+EOF
+'
+```
+
+After fixing the env file:
+
+```bash
+sudo systemctl restart torrento-bot
+sudo journalctl -u torrento-bot -n 20 --no-pager
 ```
 
 ## Commands
