@@ -1,0 +1,2 @@
+python-telegram-bot>=21.0
+deluge-client>=1.9.0

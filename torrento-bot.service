@@ -1,0 +1,17 @@
+[Unit]
+Description=Telegram bot for adding torrents to Deluge
+After=network-online.target deluged.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=sharing
+Group=sharing
+WorkingDirectory=/home/jbmild/project/torrento
+EnvironmentFile=/etc/torrento-bot.env
+ExecStart=/home/jbmild/project/torrento/.venv/bin/python /home/jbmild/project/torrento/torrento-bot.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
