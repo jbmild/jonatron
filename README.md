@@ -279,7 +279,47 @@ Useful commands:
 ```bash
 sudo systemctl restart torrento-bot   # apply config or code changes
 sudo systemctl stop torrento-bot
-sudo journalctl -u torrento-bot -f    # follow logs
+sudo journalctl -u torrento-bot -f    # follow logs live
+sudo journalctl -u torrento-bot -n 50 --no-pager   # last 50 lines
+```
+
+#### Troubleshooting systemd
+
+| `systemctl status` | Meaning |
+|--------------------|---------|
+| `status=217/USER` | The `User=` in the service file does not exist on this server |
+| `status=200/CHDIR` | `WorkingDirectory=` path does not exist |
+| `status=203/EXEC` | `ExecStart=` path wrong (missing `.venv` or script) |
+| `status=1/FAILURE` | Bot crashed — check `journalctl` for Python errors |
+
+The default service file uses `User=sharing` and `/home/jbmild/project/jonatron`. Edit it for your server before installing, for example on `jarvis` as user `jonatan`:
+
+```bash
+sudo nano /etc/systemd/system/torrento-bot.service
+```
+
+```ini
+[Service]
+User=jonatan
+Group=jonatan
+WorkingDirectory=/home/jonatan/projects/jonatron
+EnvironmentFile=/etc/torrento-bot.env
+ExecStart=/home/jonatan/projects/jonatron/.venv/bin/python /home/jonatan/projects/jonatron/torrento-bot.py
+```
+
+Then:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart torrento-bot
+sudo journalctl -u torrento-bot -n 30 --no-pager
+```
+
+Ensure `/etc/torrento-bot.env` exists and is readable by the service user:
+
+```bash
+sudo chown jonatan:jonatan /etc/torrento-bot.env
+sudo chmod 600 /etc/torrento-bot.env
 ```
 
 ## Commands
