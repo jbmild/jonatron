@@ -61,18 +61,182 @@ Set these variables:
 | `DELUGE_USERNAME` | Deluge RPC username (default: `localclient`) |
 | `DELUGE_PASSWORD` | Deluge RPC password from the auth file |
 
-### 3. Configure Deluge RPC
+### 3. Install and configure Deluge
 
-Ensure Deluge RPC is enabled. The auth file uses `username:password` lines, for example:
+The bot talks to the **Deluge daemon** (`deluged`) over **RPC**, not through the web UI.
+
+| Service | Default port | What it is |
+|---------|--------------|------------|
+| `deluge-web` | **8112** | Browser UI — the password you type at `server_ip:8112` |
+| `deluged` | **58846** | RPC daemon — what the bot connects to |
+
+These use **different passwords**. The web UI login does **not** go in `DELUGE_PASSWORD`.
+
+Your bot env should use:
 
 ```
-localclient:your_deluge_rpc_password
+DELUGE_HOST=127.0.0.1
+DELUGE_PORT=58846
+DELUGE_USERNAME=localclient
+DELUGE_PASSWORD=<from the auth file, not the web UI password>
 ```
 
-Match `DELUGE_USERNAME` and `DELUGE_PASSWORD` to that entry in:
+Use `127.0.0.1` when the bot and Deluge run on the same server.
 
-- `~/.config/deluge/auth`, or
-- `/var/lib/deluge/.config/deluge/auth`
+**Deluge 2.x** (including `2.1.2`) is supported by `deluge-client`. RPC still uses port `58846`. In Deluge 2, the auth file often has three parts — use only the first two in your env:
+
+```
+localclient:your_rpc_password:10
+         ↑ username    ↑ DELUGE_PASSWORD   ↑ level (ignore)
+```
+
+You may see harmless version-probe warnings in Deluge logs when the bot connects; that is normal.
+
+#### Find the RPC password
+
+There is no single fixed path. Deluge creates `auth` inside **whoever runs `deluged`'s config directory**. If one path does not exist, use the steps below.
+
+**Option A — Web UI (easiest if you already log in on port 8112)**
+
+1. Open `http://your-server:8112`
+2. Go to **Preferences** (gear icon) → **Connection Manager**
+3. Select **Local Host** (or **127.0.0.1:58846**)
+4. Click **Edit** — the **Username** and **Password** shown there are your RPC credentials
+
+Put those in `torrento-bot.env`:
+
+```
+DELUGE_USERNAME=<username from Connection Manager>
+DELUGE_PASSWORD=<password from Connection Manager>
+```
+
+**Option B — Find the auth file on disk**
+
+Run on the server:
+
+```bash
+# Who runs Deluge?
+ps aux | grep -E 'deluged|deluge-web'
+
+# Is RPC listening?
+ss -tlnp | grep 58846
+
+# Search everywhere (may take a minute)
+sudo find / -name auth -path '*/deluge/*' 2>/dev/null
+```
+
+If Deluge runs in **Docker**, the config is usually inside the container or a mounted volume:
+
+```bash
+docker ps
+docker exec -it <container_name> find / -name auth -path '*/deluge/*' 2>/dev/null
+# common mounts: /config/auth  or  /config/deluge/auth
+```
+
+Once you find the file:
+
+```bash
+sudo cat /path/to/deluge/auth
+```
+
+Example line:
+
+```
+localclient:a1b2c3d4e5f6...:10
+```
+
+Use the first two parts only in your env file.
+
+**Option C — Derive config dir from the running process**
+
+If `ps` shows something like `deluged -c /some/path`, the auth file is:
+
+```
+/some/path/auth
+```
+
+Some installs use:
+
+| Setup | Typical auth path |
+|-------|-------------------|
+| your user | `~/.config/deluge/auth` |
+| `sharing` user | `/home/sharing/.config/deluge/auth` |
+| Debian `deluged` package | `/var/lib/deluge-daemon/auth` |
+| `deluge` system user (old path) | `/var/lib/deluge/.config/deluge/auth` |
+| Docker (linuxserver etc.) | `/config/auth` inside the container |
+
+On **Debian/Ubuntu**, `deluged` often runs as `debian-deluged` with an explicit config dir. `ps` truncates long lines, so read the full path from `/proc`:
+
+```bash
+# Full command line (replace PID with deluged PID from ps)
+tr '\0' ' ' < /proc/$(pgrep -f '/usr/bin/deluged')/cmdline; echo
+
+# List likely config dirs
+sudo ls /var/lib/ | grep -i delu
+```
+
+Example output: `deluged -d -c /var/lib/deluge-daemon` → auth is at `/var/lib/deluge-daemon/auth`.
+
+When `-c /some/path` is set, the auth file is **`/some/path/auth`**, not `/some/path/.config/deluge/auth`.
+
+#### If Deluge is not installed yet
+
+The Python package `deluge-client` in this repo is **not** Deluge itself. Install the daemon:
+
+```bash
+sudo apt update
+sudo apt install deluged deluge-web
+```
+
+Start Deluge as the same user that runs the bot (`sharing`):
+
+```bash
+sudo mkdir -p /home/sharing/.config/deluge
+sudo chown -R sharing:sharing /home/sharing
+sudo -u sharing deluged -d
+sudo cat /home/sharing/.config/deluge/auth
+```
+
+#### Optional: set your own RPC password
+
+Only do this after you know where Deluge's config directory is (from the steps above):
+
+```bash
+sudo systemctl stop deluged 2>/dev/null || sudo pkill deluged
+echo 'localclient:your_chosen_password:10' | sudo tee /path/to/deluge/auth
+sudo systemctl start deluged
+```
+
+Use the same password in `DELUGE_PASSWORD`.
+
+#### Verify Deluge RPC is listening
+
+```bash
+ss -tlnp | grep 58846
+```
+
+You should see `deluged` on port `58846`. Port `8112` alone only means the web UI is up.
+
+#### Test the connection
+
+```bash
+cd /home/jbmild/project/jonatron
+set -a && source torrento-bot.env && set +a
+.venv/bin/python - <<'EOF'
+import os
+from deluge_client import DelugeRPCClient
+
+client = DelugeRPCClient(
+    os.environ.get("DELUGE_HOST", "127.0.0.1"),
+    int(os.environ.get("DELUGE_PORT", "58846")),
+    os.environ.get("DELUGE_USERNAME", "localclient"),
+    os.environ["DELUGE_PASSWORD"],
+)
+client.connect()
+print("Connected to Deluge OK")
+client.disconnect()
+EOF
+```
 
 The bot user must be able to write to `/home/sharing` and its subdirectories.
 
@@ -85,7 +249,7 @@ cd /home/jbmild/project/jonatron
 cp torrento-bot.env.example torrento-bot.env
 nano torrento-bot.env
 set -a && source torrento-bot.env && set +a
-./torrento-bot.py
+.venv/bin/python torrento-bot.py
 ```
 
 Do not commit `torrento-bot.env`; it contains secrets.

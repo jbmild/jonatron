@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import inspect
 import logging
 import os
 import re
@@ -51,8 +52,14 @@ def get_deluge_client() -> DelugeRPCClient:
     host = os.environ.get("DELUGE_HOST", "127.0.0.1")
     port = int(os.environ.get("DELUGE_PORT", "58846"))
     username = os.environ.get("DELUGE_USERNAME", "localclient")
-    password = os.environ.get("DELUGE_PASSWORD", "")
-    return DelugeRPCClient(host, port, username, password)
+    password = os.environ.get("DELUGE_PASSWORD")
+    if not password:
+        raise RuntimeError("DELUGE_PASSWORD is not set in the environment.")
+
+    init_params = inspect.signature(DelugeRPCClient.__init__).parameters
+    if "username" in init_params:
+        return DelugeRPCClient(host, port, username, password)
+    return DelugeRPCClient(host, port, password)
 
 
 def sanitize_name(name: str) -> str:
@@ -225,6 +232,16 @@ def main() -> None:
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     if not token:
         print("TELEGRAM_BOT_TOKEN is required.", file=sys.stderr)
+        sys.exit(1)
+
+    logger.info(
+        "Starting jonatron bot (DelugeRPCClient signature: %s)",
+        inspect.signature(DelugeRPCClient.__init__),
+    )
+    try:
+        get_deluge_client()
+    except Exception as exc:
+        logger.error("Deluge client configuration error: %s", exc)
         sys.exit(1)
 
     application = Application.builder().token(token).build()
