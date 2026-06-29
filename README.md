@@ -23,7 +23,7 @@ Downloads are saved under:
 - Deluge daemon with RPC enabled (`deluged`)
 - A Telegram bot token from [@BotFather](https://t.me/BotFather)
 
-## Setup
+## Setup 
 
 ```bash
 cd /home/jbmild/project/torrento
