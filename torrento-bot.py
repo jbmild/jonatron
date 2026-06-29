@@ -50,8 +50,9 @@ class FileType(str, Enum):
 def get_deluge_client() -> DelugeRPCClient:
     host = os.environ.get("DELUGE_HOST", "127.0.0.1")
     port = int(os.environ.get("DELUGE_PORT", "58846"))
+    username = os.environ.get("DELUGE_USERNAME", "localclient")
     password = os.environ.get("DELUGE_PASSWORD", "")
-    return DelugeRPCClient(host, port, password)
+    return DelugeRPCClient(host, port, username, password)
 
 
 def sanitize_name(name: str) -> str:

@@ -7,9 +7,9 @@ Wants=network-online.target
 Type=simple
 User=sharing
 Group=sharing
-WorkingDirectory=/home/jbmild/project/torrento
+WorkingDirectory=/home/jbmild/project/jonatron
 EnvironmentFile=/etc/torrento-bot.env
-ExecStart=/home/jbmild/project/torrento/.venv/bin/python /home/jbmild/project/torrento/torrento-bot.py
+ExecStart=/home/jbmild/project/jonatron/.venv/bin/python /home/jbmild/project/jonatron/torrento-bot.py
 Restart=on-failure
 RestartSec=5
 

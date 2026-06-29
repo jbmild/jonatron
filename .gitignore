@@ -149,6 +149,7 @@ activemq-data/
 
 # Environments
 .env
+torrento-bot.env
 .envrc
 .venv
 env/
