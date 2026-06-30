@@ -4,12 +4,21 @@ Linux Telegram bot that collects a magnet link, download name, and file type, th
 
 Only the Telegram user `@joni_m91` can add torrents. Everyone else receives a welcome message.
 
+## Architecture
+
+The main menu routes each option to a **strategy** class in `strategies/`. To add a new menu action:
+
+1. Create `strategies/your_action.py` implementing `BotStrategy`
+2. Register it in `strategies/__init__.py` inside `STRATEGIES`
+
+Each strategy owns its conversation states and handlers.
+
 ## Flow
 
 1. Send `/start`
-2. Send a magnet link
-3. Send the download name (used as the folder name)
-4. Choose **Movie**, **TV show**, or **Other**
+2. Choose **Add torrent** or **Restart server**
+3. For torrents: send a magnet link, download name, then choose **Movie**, **TV show**, or **Other**
+4. For restart: confirm **Yes, restart** (requires passwordless `sudo reboot` for the bot user)
 
 Downloads are saved under:
 
@@ -402,5 +411,5 @@ sudo journalctl -u torrento-bot -n 20 --no-pager
 
 ## Commands
 
-- `/start` — begin a new download request (authorized users only)
-- `/cancel` — cancel the current request (authorized users only)
+- `/start` — open the main menu (authorized users only)
+- `/cancel` — cancel the current action (authorized users only)
