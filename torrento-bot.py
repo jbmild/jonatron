@@ -12,13 +12,15 @@ from deluge_client import DelugeRPCClient
 from telegram import Update
 from telegram.ext import (
     Application,
+    CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
     ConversationHandler,
-    TypeHandler,
+    MessageHandler,
+    filters,
 )
 
-from auth import gate_unauthorized
+from auth import is_authorized_user, reply_unauthorized, reply_unauthorized_conversation
 from deluge import validate_deluge_config
 from menu import menu_handlers, start
 from strategies import collect_conversation_states
@@ -31,11 +33,20 @@ logger = logging.getLogger(__name__)
 
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if not is_authorized_user(update):
+        return await reply_unauthorized_conversation(update)
+
     context.user_data.clear()
     await update.message.reply_text(
         "Cancelled. Send /start when you want to open the menu."
     )
     return ConversationHandler.END
+
+
+async def handle_unauthorized(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if is_authorized_user(update):
+        return
+    await reply_unauthorized(update)
 
 
 def build_conversation_handler() -> ConversationHandler:
@@ -46,7 +57,6 @@ def build_conversation_handler() -> ConversationHandler:
         states=states,
         fallbacks=[CommandHandler("cancel", cancel)],
         allow_reentry=True,
-        per_message=True,
     )
 
 
@@ -77,8 +87,9 @@ def main() -> None:
         sys.exit(1)
 
     application = Application.builder().token(token).build()
-    application.add_handler(TypeHandler(Update, gate_unauthorized, block=False), group=0)
     application.add_handler(build_conversation_handler(), group=0)
+    application.add_handler(CallbackQueryHandler(handle_unauthorized), group=1)
+    application.add_handler(MessageHandler(filters.ALL, handle_unauthorized), group=1)
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
