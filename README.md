@@ -97,6 +97,19 @@ Set these variables:
 | `DELUGE_USERNAME` | Deluge RPC username (default: `localclient`) |
 | `DELUGE_PASSWORD` | Deluge RPC password from the auth file |
 | `DELUGE_TIMEOUT` | RPC connect timeout in seconds (default: `60`) |
+| `DOWNLOAD_PATH_MOVIES` | Base folder for movie downloads + `<name>` |
+| `DOWNLOAD_PATH_SHOWS` | Base folder for TV show downloads + `<name>` |
+| `DOWNLOAD_PATH_OTHER` | Base folder for other downloads + `<name>` |
+
+Each torrent is saved to `<base>/<name>/`, where `<name>` is what you enter in Telegram.
+
+These paths must already exist and be **writable by the user running `deluged`** (on jarvis that is usually `debian-deluged`, not `jonatan`). Check Deluge's default in:
+
+```bash
+grep download_location /var/lib/deluged/config/core.conf
+```
+
+Set the `DOWNLOAD_PATH_*` values to match folders that user can write to.
 
 ### 3. Install and configure Deluge
 

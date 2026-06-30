@@ -12,10 +12,6 @@ from deluge_client import DelugeRPCClient
 
 logger = logging.getLogger(__name__)
 
-BASE_OTHER = Path("/home/sharing")
-BASE_MOVIES = Path("/home/sharing/media/movies")
-BASE_SHOWS = Path("/home/sharing/media/shows")
-
 MAGNET_PREFIX = re.compile(r"^magnet:\?", re.IGNORECASE)
 INVALID_NAME_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 
@@ -24,6 +20,18 @@ class FileType(str, Enum):
     MOVIE = "movie"
     TV_SHOW = "tv_show"
     OTHER = "other"
+
+
+def _path_from_env(var_name: str, default: str) -> Path:
+    return Path(os.environ.get(var_name, default)).expanduser()
+
+
+def download_base_for(file_type: FileType) -> Path:
+    if file_type is FileType.MOVIE:
+        return _path_from_env("DOWNLOAD_PATH_MOVIES", "/home/sharing/media/movies")
+    if file_type is FileType.TV_SHOW:
+        return _path_from_env("DOWNLOAD_PATH_SHOWS", "/home/sharing/media/shows")
+    return _path_from_env("DOWNLOAD_PATH_OTHER", "/home/sharing")
 
 
 def get_deluge_client() -> DelugeRPCClient:
@@ -83,28 +91,49 @@ def sanitize_name(name: str) -> str:
 
 def download_path_for(file_type: FileType, name: str) -> Path:
     safe_name = sanitize_name(name)
-    if file_type is FileType.MOVIE:
-        return BASE_MOVIES / safe_name
-    if file_type is FileType.TV_SHOW:
-        return BASE_SHOWS / safe_name
-    return BASE_OTHER / safe_name
+    return download_base_for(file_type) / safe_name
 
 
 def add_magnet_to_deluge(magnet: str, download_path: Path) -> str:
-    download_path.mkdir(parents=True, exist_ok=True)
+    location = str(download_path)
+    options = {
+        "download_location": location,
+        "move_completed": False,
+        "add_paused": True,
+    }
     client = get_deluge_client()
     connect_deluge(client)
     try:
         torrent_id = client.call(
             "core.add_torrent_magnet",
             magnet.strip(),
-            {"download_location": str(download_path), "add_paused": False},
+            options,
+        )
+        if not torrent_id:
+            raise RuntimeError("Deluge did not return a torrent id.")
+
+        client.call(
+            "core.set_torrent_options",
+            [torrent_id],
+            {"download_location": location, "move_completed": False},
+        )
+        client.call("core.resume_torrent", [torrent_id])
+
+        status = client.call(
+            "core.get_torrents_status",
+            {"id": torrent_id},
+            ["download_location", "name"],
+        )
+        torrent_status = status.get(torrent_id, {})
+        logger.info(
+            "Added torrent %s (%s) with download_location=%s",
+            torrent_id,
+            torrent_status.get("name", "unknown"),
+            torrent_status.get("download_location", location),
         )
     finally:
         client.disconnect()
 
-    if not torrent_id:
-        raise RuntimeError("Deluge did not return a torrent id.")
     return torrent_id
 
 
