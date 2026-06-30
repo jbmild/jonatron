@@ -272,8 +272,22 @@ def main() -> None:
         "Starting jonatron bot (DelugeRPCClient signature: %s)",
         inspect.signature(DelugeRPCClient.__init__),
     )
+    deluge_host = os.environ.get("DELUGE_HOST", "127.0.0.1")
+    deluge_port = os.environ.get("DELUGE_PORT", "58846")
+    logger.info("Deluge config from environment: host=%s port=%s", deluge_host, deluge_port)
+    if deluge_port == "8112":
+        logger.error(
+            "DELUGE_PORT=8112 is the web UI port, not RPC. Use DELUGE_PORT=58846."
+        )
+        sys.exit(1)
     try:
-        get_deluge_client()
+        client = get_deluge_client()
+        logger.info(
+            "Deluge client ready: host=%s port=%s user=%s",
+            client.host,
+            client.port,
+            client.username,
+        )
     except Exception as exc:
         logger.error("Deluge client configuration error: %s", exc)
         sys.exit(1)

@@ -40,16 +40,16 @@ chmod +x torrento-bot.py
 
 ### 2. Create the environment file
 
-Copy the example file, edit it with your values, and give the bot user read access:
+Create the env file **in the project directory** (systemd reads this same file):
 
 ```bash
-sudo cp torrento-bot.env.example /etc/torrento-bot.env
-sudo chown sharing:sharing /etc/torrento-bot.env
-sudo chmod 600 /etc/torrento-bot.env
-sudo nano /etc/torrento-bot.env
+cd /home/jonatan/projects/jonatron
+cp torrento-bot.env.example torrento-bot.env
+chmod 600 torrento-bot.env
+nano torrento-bot.env
 ```
 
-The `chown` step is required. Without it, only root can read the file and the systemd service (which runs as `sharing`) will fail to start.
+Do not commit `torrento-bot.env`; it contains secrets.
 
 Set these variables:
 
@@ -261,7 +261,35 @@ Send `/start` to the bot from `@joni_m91` to verify the magnet flow works.
 
 The included `torrento-bot.service` unit starts the bot automatically when the server boots.
 
-Review the service file and adjust `User`, `Group`, `WorkingDirectory`, or `ExecStart` if your paths or service user differ.
+Review the service file and adjust `User`, `Group`, `WorkingDirectory`, `EnvironmentFile`, and `ExecStart` if your paths differ.
+
+The service loads env from the project directory, for example:
+
+```ini
+EnvironmentFile=/home/jonatan/projects/jonatron/torrento-bot.env
+```
+
+To point systemd at your project env file on jarvis:
+
+```bash
+sudo nano /etc/systemd/system/torrento-bot.service
+```
+
+Change the `EnvironmentFile=` line to your project path (adjust username/path if needed):
+
+```ini
+EnvironmentFile=/home/jonatan/projects/jonatron/torrento-bot.env
+```
+
+Then reload:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart torrento-bot
+sudo journalctl -u torrento-bot -n 10 --no-pager
+```
+
+You should see `Deluge config from environment: host=127.0.0.1 port=58846`.
 
 Install and enable the service:
 
@@ -304,7 +332,7 @@ sudo nano /etc/systemd/system/torrento-bot.service
 User=jonatan
 Group=jonatan
 WorkingDirectory=/home/jonatan/projects/jonatron
-EnvironmentFile=/etc/torrento-bot.env
+EnvironmentFile=/home/jonatan/projects/jonatron/torrento-bot.env
 ExecStart=/home/jonatan/projects/jonatron/.venv/bin/python /home/jonatan/projects/jonatron/torrento-bot.py
 ```
 
@@ -316,11 +344,11 @@ sudo systemctl restart torrento-bot
 sudo journalctl -u torrento-bot -n 30 --no-pager
 ```
 
-Ensure `/etc/torrento-bot.env` exists and is readable by the service user:
+Ensure `torrento-bot.env` exists in the project directory and is readable by the service user:
 
 ```bash
-sudo chown jonatan:jonatan /etc/torrento-bot.env
-sudo chmod 600 /etc/torrento-bot.env
+chmod 600 ~/projects/jonatron/torrento-bot.env
+grep DELUGE ~/projects/jonatron/torrento-bot.env
 ```
 
 #### SSL handshake timeout
@@ -333,7 +361,7 @@ Your earlier check showed Deluge RPC only on localhost:
 127.0.0.1:58846
 ```
 
-So `/etc/torrento-bot.env` **must** use:
+So `torrento-bot.env` **must** use:
 
 ```
 DELUGE_HOST=127.0.0.1
@@ -346,7 +374,7 @@ Verify as the same user systemd uses:
 
 ```bash
 sudo -u jonatan bash -lc '
-  set -a && source /etc/torrento-bot.env && set +a
+  set -a && source /home/jonatan/projects/jonatron/torrento-bot.env && set +a
   echo "DELUGE_HOST=$DELUGE_HOST DELUGE_PORT=$DELUGE_PORT"
   /home/jonatan/projects/jonatron/.venv/bin/python - <<'"'"'EOF'"'"'
 import os
