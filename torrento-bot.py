@@ -46,6 +46,7 @@ def build_conversation_handler() -> ConversationHandler:
         states=states,
         fallbacks=[CommandHandler("cancel", cancel)],
         allow_reentry=True,
+        per_message=True,
     )
 
 
@@ -76,7 +77,7 @@ def main() -> None:
         sys.exit(1)
 
     application = Application.builder().token(token).build()
-    application.add_handler(TypeHandler(Update, gate_unauthorized), group=0)
+    application.add_handler(TypeHandler(Update, gate_unauthorized, block=False), group=0)
     application.add_handler(build_conversation_handler(), group=0)
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
