@@ -18,7 +18,34 @@ Each strategy owns its conversation states and handlers.
 1. Send `/start`
 2. Choose **Add torrent** or **Restart server**
 3. For torrents: send a magnet link, download name, then choose **Movie**, **TV show**, or **Other**
-4. For restart: confirm **Yes, restart** (requires passwordless `sudo reboot` for the bot user)
+4. For restart: confirm **Yes, restart** (see [Restart server setup](#restart-server-setup) below)
+
+### Restart server setup
+
+The bot runs as a systemd service with no terminal, so `sudo reboot` cannot prompt for a password. Allow passwordless reboot for the service user:
+
+```bash
+# Find the reboot binary path on your system
+which reboot
+
+# Create a sudoers drop-in (use the path from `which reboot`)
+sudo visudo -f /etc/sudoers.d/torrento-bot-reboot
+```
+
+Add this line (replace `jonatan` and the path if needed):
+
+```
+jonatan ALL=(root) NOPASSWD: /usr/sbin/reboot
+```
+
+Validate and test without rebooting:
+
+```bash
+sudo visudo -c
+sudo -u jonatan sudo -l | grep reboot
+```
+
+You should see `NOPASSWD: /usr/sbin/reboot`. Then try **Restart server** in Telegram again.
 
 Downloads are saved under:
 

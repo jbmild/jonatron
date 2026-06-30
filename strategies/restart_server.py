@@ -39,6 +39,11 @@ def restart_server() -> None:
     )
     if result.returncode != 0:
         detail = result.stderr.strip() or result.stdout.strip() or f"exit code {result.returncode}"
+        if "password is required" in detail.lower() or "a terminal is required" in detail.lower():
+            raise RuntimeError(
+                "sudo needs a password. Allow passwordless reboot for the bot user, e.g. "
+                "jonatan ALL=(root) NOPASSWD: /usr/sbin/reboot"
+            )
         raise RuntimeError(detail)
 
 
